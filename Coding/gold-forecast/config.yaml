@@ -1,0 +1,75 @@
+# =============================================================================
+# config.yaml  —  single source of truth for tickers, dates, and parameters
+# =============================================================================
+# Stages 1-2 only (data + features). Model/backtest params live elsewhere later.
+
+date_range:
+  start: "2010-01-01"
+  end: null            # null => today at pull time
+
+# -----------------------------------------------------------------------------
+# Yahoo Finance tickers (pulled via yfinance). Grouped by role.
+# GC=F (COMEX gold) is deep and liquid on Yahoo — data thinness is NOT expected
+# to be a problem. The pull step still reports exactly what we get; verify,
+# don't assume.
+# -----------------------------------------------------------------------------
+yahoo:
+  target:
+    GC=F: gold_comex                # primary asset (continuous front-month)
+  cross_asset:
+    SI=F:  silver_comex             # co-metal; gold/silver ratio is the classic signal
+    DX-Y.NYB: dxy                   # USD strength (gold is priced in USD; inverse beta)
+    ^VIX:  vix                      # risk sentiment / safe-haven demand proxy
+  equity_proxies:
+    GDX:  gold_miners               # producer equities (leveraged flow/sentiment proxy)
+
+# -----------------------------------------------------------------------------
+# FRED series (pulled via free fredgraph.csv endpoint; no API key needed).
+# frequency + release_lag_months drive point-in-time alignment in features.py.
+# release_lag_months is a CONSERVATIVE assumption, not true ALFRED vintage data.
+# Real yields are THE textbook gold driver (opportunity cost of a zero-yield
+# asset); inflation expectations and realized CPI complete the macro picture.
+# -----------------------------------------------------------------------------
+fred:
+  DFII10:   {name: real_10y,       freq: daily,   release_lag_months: 0}
+  T10YIE:   {name: infl_breakeven, freq: daily,   release_lag_months: 0}
+  CPIAUCSL: {name: us_cpi,         freq: monthly, release_lag_months: 1}
+
+# -----------------------------------------------------------------------------
+# Data validation thresholds
+# -----------------------------------------------------------------------------
+validation:
+  stale_min_run: 4            # >= this many identical consecutive closes => flag
+  outlier_return_z: 6.0       # |z-score| of log return above this => flag
+  outlier_return_hard: 0.20   # |single-day log return| above this => flag (20%)
+  max_forward_fill_days: 5    # gaps longer than this are reported, not filled
+
+# -----------------------------------------------------------------------------
+# Futures roll handling (see rolls.py — heuristic; honest limitations documented)
+# GC=F active contracts are Feb/Apr/Jun/Aug/Oct/Dec — rolls cluster near month
+# boundaries of those months; the month-boundary heuristic still applies.
+# -----------------------------------------------------------------------------
+rolls:
+  jump_z: 5.0                 # |log-return z| above this is a roll *candidate*
+  jump_hard: 0.08             # OR |log return| above this near a month boundary
+  month_boundary_window: 5    # trading days near month-end/start to weight rolls
+  method: neutralize          # "neutralize" (default) | "ratio_backadjust"
+
+# -----------------------------------------------------------------------------
+# Feature engineering
+# -----------------------------------------------------------------------------
+features:
+  return_lookbacks: [1, 5, 20]
+  vol_window: 20
+  rsi_window: 14
+  ma_windows: [20, 50]
+  zscore_window: 60           # for gold/silver ratio z-score, rolling stats
+  corr_window: 60             # rolling corr with DXY
+  beta_window: 60             # rolling gold beta to real-yield CHANGES
+  vol_regime_window: 60       # realized-vol percentile window for regime flag
+
+# -----------------------------------------------------------------------------
+# Prediction label (defined here so features never accidentally reuse it)
+# -----------------------------------------------------------------------------
+label:
+  horizon_days: 5             # N-day forward log return (primary); 1/10/20 later

@@ -1,0 +1,17 @@
+# Data is pulled locally, never committed
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/raw/fomc_dates.csv        # small hand-maintained calendar is OK to commit
+
+# Generated reports
+reports/data_quality/report.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/

@@ -1,0 +1,15 @@
+# Core (stages 1-2)
+pandas>=2.0
+numpy>=1.24
+scipy>=1.10
+requests>=2.28
+PyYAML>=6.0
+yfinance>=0.2.40      # market data pull (Yahoo)
+
+# Dev / testing
+pytest>=7.0
+
+# NOTE: FRED is pulled via the free fredgraph.csv endpoint with `requests`,
+# so no fredapi key or pandas_datareader dependency is required.
+# Modelling / backtest deps (xgboost, lightgbm, shap, matplotlib) are added
+# in later stages, deliberately not here — stages 1-2 stay lean.
