@@ -17,8 +17,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+import copy
+
 from src.config import RAW, ensure_dirs, load_config
-from src import validate, rolls, features
+from src import validate, rolls, features, evaluate, models
 
 RNG = np.random.default_rng(42)
 
@@ -138,6 +140,36 @@ def main():
     if not audit["passed"]:
         print("           offenders:", audit["offenders"])
     ok &= audit["passed"]
+
+    # 6) stage-3 harness mechanics: embargoed walk-forward produces one disjoint
+    #    out-of-sample prediction per test row, for every model in BOTH heads.
+    #    Uses the harness internals directly so it does NOT overwrite the real
+    #    reports/model report (evaluate.run() would). XGBoost is shrunk to keep
+    #    the smoke test fast — correctness of plumbing is the point, not fit.
+    demo_cfg = copy.deepcopy(cfg)
+    demo_cfg["model"]["xgboost"].update({"n_estimators": 30, "max_depth": 2})
+    wf = demo_cfg["model"]["walk_forward"]
+    N = demo_cfg["label"]["horizon_days"]
+    embargo = wf["embargo_days"] if wf["embargo_days"] is not None else N
+    y_up = (y > 0).astype(int)
+    folds = evaluate.walk_forward_folds(
+        len(X), wf["min_train_days"], wf["test_days"], embargo, wf["scheme"])
+    reg = evaluate._run_head(X, y, folds, models.build_regressors(demo_cfg))
+    clf = evaluate._run_head(X, y_up, folds, models.build_classifiers(demo_cfg))
+    oos_len = sum(len(f.test_pos) for f in folds)
+    m3 = (
+        len(folds) > 0
+        and len(reg) == oos_len and len(clf) == oos_len
+        and not reg.index.duplicated().any()          # disjoint OOS blocks
+        and reg.notna().all().all() and clf.notna().all().all()
+        and clf.to_numpy().min() >= 0.0 and clf.to_numpy().max() <= 1.0   # P(up)
+        and all(train_hi + N <= test_lo                # embargo purges overlap
+                for train_hi, test_lo in
+                ((f.train_pos[-1], f.test_pos[0]) for f in folds))
+    )
+    print(f"[model]    walk-forward OOS ({len(folds)} folds, {oos_len} rows) "
+          f"clean, both heads, embargo respected : {m3}")
+    ok &= m3
 
     print("\n" + ("ALL CHECKS PASSED ✅" if ok else "SOME CHECKS FAILED ❌"))
     return 0 if ok else 1

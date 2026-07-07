@@ -1,0 +1,77 @@
+{
+  "horizon_days": 1,
+  "embargo_days": 1,
+  "scheme": "expanding",
+  "n_folds": 54,
+  "n_oos_rows": 3391,
+  "oos_span": [
+    "2013-01-07",
+    "2026-07-02"
+  ],
+  "train_span_first_fold": [
+    "2010-01-04",
+    "2013-01-03"
+  ],
+  "oos_up_rate": 0.5207903273370688,
+  "naive_rmse": 0.010673370539107515,
+  "regression": {
+    "naive_zero": {
+      "rmse": 0.010673370539107515,
+      "rmse_ratio_vs_naive": 1.0,
+      "ic_spearman": NaN,
+      "hit_rate": NaN,
+      "signal_mean_ret_longshort": 0.0,
+      "signal_mean_ret_longonly": NaN
+    },
+    "momentum": {
+      "rmse": 0.010666545448608396,
+      "rmse_ratio_vs_naive": 0.999360549652604,
+      "ic_spearman": 0.013558356040858657,
+      "hit_rate": 0.513417870834562,
+      "signal_mean_ret_longshort": 0.0001677943872610744,
+      "signal_mean_ret_longonly": 0.0003389476471350768
+    },
+    "ridge": {
+      "rmse": 0.010642745055163215,
+      "rmse_ratio_vs_naive": 0.997130664223444,
+      "ic_spearman": 0.10762692513653638,
+      "hit_rate": 0.536714833382483,
+      "signal_mean_ret_longshort": 0.0008998501435141358,
+      "signal_mean_ret_longonly": 0.0009778554728493611
+    },
+    "xgboost": {
+      "rmse": 0.01085079401596711,
+      "rmse_ratio_vs_naive": 1.0166230035966155,
+      "ic_spearman": 0.0662511257244277,
+      "hit_rate": 0.5308168681804777,
+      "signal_mean_ret_longshort": 0.0006024710405124249,
+      "signal_mean_ret_longonly": 0.0007417521807833499
+    }
+  },
+  "classification": {
+    "base_rate": {
+      "accuracy": 0.5207903273370688,
+      "accuracy_vs_baserate": 0.0,
+      "auc": 0.48940761390365006,
+      "log_loss": 0.6931673268827347
+    },
+    "momentum": {
+      "accuracy": 0.5207903273370688,
+      "accuracy_vs_baserate": 0.0,
+      "auc": 0.4890189040857218,
+      "log_loss": 0.6932519439336609
+    },
+    "logistic": {
+      "accuracy": 0.5434974933647891,
+      "accuracy_vs_baserate": 0.022707166027720382,
+      "auc": 0.5447035456050179,
+      "log_loss": 0.6945593631124338
+    },
+    "xgboost": {
+      "accuracy": 0.5305219699203775,
+      "accuracy_vs_baserate": 0.00973164258330872,
+      "auc": 0.533344890669919,
+      "log_loss": 0.7044438123703003
+    }
+  }
+}

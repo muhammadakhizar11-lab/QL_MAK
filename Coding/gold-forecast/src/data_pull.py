@@ -15,16 +15,15 @@ from __future__ import annotations
 
 import io
 import json
+import subprocess
 import warnings
 from datetime import datetime, timezone
 
 import pandas as pd
-import requests
 
 from .config import RAW, load_config, ensure_dirs
 
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}"
-_UA = {"User-Agent": "Mozilla/5.0 (research; gold-forecast)"}
 
 
 # --------------------------------------------------------------------------- #
@@ -57,10 +56,18 @@ def pull_yahoo(ticker: str, start: str, end: str | None) -> pd.DataFrame:
 # FRED (macro) — free CSV endpoint, no key
 # --------------------------------------------------------------------------- #
 def pull_fred(series_id: str) -> pd.Series:
-    """Return a single FRED series as a pandas Series (name=series_id)."""
-    r = requests.get(FRED_CSV.format(sid=series_id), headers=_UA, timeout=30)
-    r.raise_for_status()
-    raw = pd.read_csv(io.StringIO(r.text))
+    """Return a single FRED series as a pandas Series (name=series_id).
+
+    Uses curl (not requests) as the HTTP transport: FRED's Akamai bot
+    protection fingerprints the TLS/HTTP client and silently stalls
+    connections from Python's requests/urllib3 stack while letting
+    curl's fingerprint through.
+    """
+    result = subprocess.run(
+        ["curl", "-s", "--max-time", "30", FRED_CSV.format(sid=series_id)],
+        capture_output=True, text=True, check=True,
+    )
+    raw = pd.read_csv(io.StringIO(result.stdout))
     # fredgraph.csv columns: first is the date (name varies), second is the value.
     date_col, val_col = raw.columns[0], raw.columns[1]
     raw[date_col] = pd.to_datetime(raw[date_col])

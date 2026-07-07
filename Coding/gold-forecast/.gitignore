@@ -3,7 +3,8 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
-!data/raw/fomc_dates.csv        # small hand-maintained calendar is OK to commit
+# small hand-maintained calendar is OK to commit
+!data/raw/fomc_dates.csv
 
 # Generated reports
 reports/data_quality/report.md

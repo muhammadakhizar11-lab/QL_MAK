@@ -1,0 +1,84 @@
+{
+  "config": {
+    "mode": "long_flat",
+    "vol_target_ann": 0.1,
+    "vol_window": 20,
+    "max_leverage": 2.0,
+    "cost_bps": 1.0,
+    "stop": {
+      "max_drawdown": 0.1,
+      "cooldown_days": 5
+    }
+  },
+  "span": [
+    "2013-01-07",
+    "2026-07-02"
+  ],
+  "strategies": {
+    "reg_ridge": {
+      "ann_ret_net": 0.09989168925789736,
+      "ann_ret_gross": 0.10473048010331436,
+      "ann_vol": 0.0861374511082913,
+      "sharpe_net": 1.1596777937196487,
+      "max_drawdown": 0.22503177026833365,
+      "hit_rate_active": 0.5483870967741935,
+      "exposure_avg": 0.4593481168774134,
+      "ann_turnover": 48.38790845417007,
+      "cost_drag_ann": 0.004838790845417009,
+      "breakeven_cost_bps": 21.64393615039351,
+      "n_days": 3391
+    },
+    "clf_logistic": {
+      "ann_ret_net": 0.07667981875437009,
+      "ann_ret_gross": 0.0817080870777968,
+      "ann_vol": 0.09125283203178351,
+      "sharpe_net": 0.8403007013268627,
+      "max_drawdown": 0.22603420009460995,
+      "hit_rate_active": 0.5490101400289715,
+      "exposure_avg": 0.483256505786023,
+      "ann_turnover": 50.28268323426682,
+      "cost_drag_ann": 0.005028268323426682,
+      "breakeven_cost_bps": 16.24974679595342,
+      "n_days": 3391
+    },
+    "long_always": {
+      "ann_ret_net": 0.045321289881740744,
+      "ann_ret_gross": 0.04624683542028781,
+      "ann_vol": 0.11406318914409874,
+      "sharpe_net": 0.397334935326815,
+      "max_drawdown": 0.3602161389068565,
+      "hit_rate_active": 0.5206015037593985,
+      "exposure_avg": 0.7465837807910578,
+      "ann_turnover": 9.255455385470615,
+      "cost_drag_ann": 0.0009255455385470616,
+      "breakeven_cost_bps": 49.96710966041385,
+      "n_days": 3391
+    },
+    "momentum_20d": {
+      "ann_ret_net": 0.005224525428526065,
+      "ann_ret_gross": 0.00763555479604193,
+      "ann_vol": 0.08745818282001175,
+      "sharpe_net": 0.05973741118401805,
+      "max_drawdown": 0.40524984987234003,
+      "hit_rate_active": 0.5118110236220472,
+      "exposure_avg": 0.40468337899348455,
+      "ann_turnover": 24.110293675158648,
+      "cost_drag_ann": 0.002411029367515865,
+      "breakeven_cost_bps": 3.1669273294290083,
+      "n_days": 3391
+    },
+    "gold_buy_hold_raw": {
+      "ann_ret_net": 0.06899196235204821,
+      "ann_ret_gross": 0.06899939378820276,
+      "ann_vol": 0.16937833335478056,
+      "sharpe_net": 0.40732460277276056,
+      "max_drawdown": 0.476832166229612,
+      "hit_rate_active": 0.5226398342704942,
+      "exposure_avg": 1.0,
+      "ann_turnover": 0.07431436154526688,
+      "cost_drag_ann": 7.431436154526689e-06,
+      "breakeven_cost_bps": 9284.799378404585,
+      "n_days": 3391
+    }
+  }
+}

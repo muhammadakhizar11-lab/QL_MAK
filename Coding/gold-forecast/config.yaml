@@ -72,4 +72,65 @@ features:
 # Prediction label (defined here so features never accidentally reuse it)
 # -----------------------------------------------------------------------------
 label:
-  horizon_days: 5             # N-day forward log return (primary); 1/10/20 later
+  # Horizon sweep (reports/model/horizon_sweep.md, 2026-07): signal is strongest
+  # at 1d and decays monotonically with N — the only horizon where a baseline
+  # beats naive on BOTH heads (ridge RMSE/naive 0.997, IC +0.108; logistic acc
+  # 0.543 vs 0.521 base, AUC 0.545). Consistent with a feature set of fast daily
+  # signals. 5/10/20 remain available via `python -m src.evaluate --horizons`.
+  horizon_days: 1             # N-day forward log return (primary)
+
+# -----------------------------------------------------------------------------
+# Stage 3 — modelling (baselines + walk-forward XGBoost). Two heads run side by
+# side on the SAME folds: regression on the forward log return, and
+# classification on its sign. Nothing here is a strategy — costs, sizing and the
+# backtest are stage 4+. This stage only asks: can a model forecast, and does it
+# beat a naive benchmark out-of-sample (the bar the README sets).
+# -----------------------------------------------------------------------------
+model:
+  # Walk-forward evaluation. Expanding train window, refit each fold. The label
+  # is an N-day FORWARD return, so consecutive rows overlap by N-1 days; the
+  # embargo purges the N rows straddling each train/test boundary so no training
+  # label peeks into the test window (López de Prado purging). Default embargo
+  # (null) = label.horizon_days.
+  walk_forward:
+    scheme: expanding           # expanding | rolling
+    min_train_days: 756         # ~3 trading years before the first out-of-sample fold
+    test_days: 63               # ~1 quarter of out-of-sample rows per fold
+    embargo_days: null          # null => label.horizon_days
+    momentum_col: ret_20d       # trailing signal the momentum baselines use
+
+  # XGBoost — deliberately shallow and regularized. Daily gold returns are a
+  # low-signal, noisy, smallish dataset; deep trees just memorize. Same params
+  # for both heads (regressor vs classifier).
+  xgboost:
+    n_estimators: 300
+    max_depth: 3
+    learning_rate: 0.03
+    subsample: 0.8
+    colsample_bytree: 0.8
+    min_child_weight: 5
+    reg_lambda: 1.0
+    random_state: 42
+
+  ridge_alpha: 1.0              # linear regression baseline (L2)
+  logistic_C: 1.0              # logistic baseline (inverse L2)
+
+# -----------------------------------------------------------------------------
+# Stage 4 — strategy layer + backtest. Positions are built from the STITCHED
+# walk-forward OOS predictions (data/processed/oos_predictions.csv), i.e. only
+# forecasts a live trader could actually have had. Convention: a signal at
+# close t sets the position earning the t -> t+1 close-to-close return.
+# Benchmarks (buy-and-hold, momentum rule) run through the SAME vol-targeting /
+# cost machinery so the comparison is like-for-like.
+# -----------------------------------------------------------------------------
+strategy:
+  signals: [reg_ridge, clf_logistic]   # models that cleared the stage-3 gate
+  mode: long_flat             # long_flat | long_short
+  vol_target_ann: 0.10        # annualized vol target; null disables scaling
+  vol_window: 20              # trailing window for realized vol (known at t)
+  max_leverage: 2.0           # cap on |position| after vol scaling
+  cost_bps: 1.0               # one-way cost per unit turnover (GC futures ~0.5-1bp)
+  stop:                       # trailing equity stop (per strategy)
+    max_drawdown: 0.10        # flatten when drawdown from peak exceeds this
+    cooldown_days: 5          # stay flat this many days after a stop fires
+  trading_days: 252

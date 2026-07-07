@@ -1,40 +1,49 @@
-# Gold Forecasting — Stages 1–2 (Data + Features)
+# Gold Forecasting — Stages 1–4 (Data → Features → Models → Backtest)
 
 Research/portfolio project: forecast short-horizon gold returns from free public
-data, then (later stages) turn that into a backtested systematic strategy.
+data, then turn that into a backtested systematic strategy.
 **This is a research demonstration, not a live trading system.**
 
-This repo currently covers **stage 1 (data + validation + roll handling)** and
-**stage 2 (feature engineering + leakage audit)** only. Modelling and backtesting
-(stages 3–6) come next and are intentionally not here yet.
+This repo covers all six stages: **1** data + validation + roll handling,
+**2** feature engineering + leakage audit, **3** baselines + embargoed
+walk-forward modelling, **4** strategy layer + backtest, **5** figures, and
+**6** the research note — **[`reports/research_note.md`](reports/research_note.md)**
+is the finished write-up.
 
 ## Layout
 
 ```
 gold-forecast/
-├── config.yaml            # tickers, dates, thresholds, feature params — single source of truth
+├── config.yaml            # tickers, dates, model/strategy params — single source of truth
 ├── requirements.txt
 ├── src/
 │   ├── config.py          # config loader + project paths
 │   ├── data_pull.py       # yfinance (market) + free FRED CSV (macro) -> data/raw/ + manifest
 │   ├── validate.py        # gaps, stale runs, outliers, bad prints -> reports/data_quality/
 │   ├── rolls.py           # futures-roll detection + return neutralization (honest limits)
-│   └── features.py        # feature matrix X, forward-return label y, FEATURE_SPEC, leakage audit
+│   ├── features.py        # feature matrix X, forward-return label y, FEATURE_SPEC, leakage audit
+│   ├── models.py          # model zoo: naive/momentum/ridge/logistic/XGBoost, two heads
+│   ├── evaluate.py        # embargoed walk-forward -> reports/model/ (+ --horizons sweep)
+│   ├── strategy.py        # position engine: vol targeting, drawdown stop, turnover costs
+│   ├── backtest.py        # OOS signals vs benchmarks -> reports/backtest/
+│   └── plots.py           # publication figures -> reports/figures/
 ├── scripts/
-│   └── demo_synthetic.py  # end-to-end smoke test on generated data (no network needed)
-├── tests/
-│   └── test_logic.py      # hermetic unit tests (roll detection, point-in-time macro, etc.)
+│   ├── demo_synthetic.py  # end-to-end smoke test on generated data (no network needed)
+│   └── fetch_fomc_dates.py # scrape scheduled FOMC decision dates from federalreserve.gov
+├── tests/                 # hermetic unit tests (rolls, leakage, embargo, strategy timing)
 ├── data/raw/  data/processed/   # gitignored; populated locally
-└── reports/data_quality/        # generated validation report
+└── reports/               # data_quality/, model/, backtest/ — all generated
 ```
 
 ## Run it
 
 ```bash
 pip install -r requirements.txt
+# macOS: xgboost needs OpenMP -> `brew install libomp` (no brew? see requirements.txt)
 
-# 1. Pull data (needs internet — Yahoo + FRED)
+# 1. Pull data (needs internet — Yahoo + FRED) + the FOMC calendar
 python -m src.data_pull
+python -m scripts.fetch_fomc_dates
 
 # 2. Validate — writes reports/data_quality/report.md
 python -m src.validate
@@ -42,15 +51,26 @@ python -m src.validate
 # 3. Build features + label (prints X/y shapes)
 python -m src.features
 
+# 4. Walk-forward model evaluation — writes reports/model/report.md
+python -m src.evaluate
+python -m src.evaluate --horizons 1 5 10 20   # label-horizon sweep
+
+# 5. Strategy layer + backtest — writes reports/backtest/report.md
+python -m src.backtest
+
+# 6. Figures for the research note — writes reports/figures/*.png
+python -m src.plots
+
 # Verify the pipeline logic WITHOUT real data (generates synthetic faults):
-python -m scripts.demo_synthetic
+python -m scripts.demo_synthetic   # NOTE: overwrites data/raw/ — re-pull after
 
 # Unit tests:
 pytest -q
 ```
 
-`config.yaml` drives everything — change tickers, thresholds, the label horizon
-(`label.horizon_days`, default 5), or feature windows there.
+`config.yaml` drives everything — tickers, thresholds, the label horizon
+(`label.horizon_days`, primary = 1 after the sweep below), model and strategy
+parameters.
 
 ## Why these features (the economics)
 
@@ -69,9 +89,10 @@ reflects that:
 - **VIX 5d change** — safe-haven / risk-off flow proxy.
 - **Gold miners (`GDX`) 5d return** — leveraged sentiment/flow proxy.
 - **FOMC-day flag** — monetary policy days matter more for gold than for almost
-  any other commodity. Not hard-coded: drop a one-column
-  `data/raw/fomc_dates.csv` (`date` header, from federalreserve.gov) and it's
-  picked up; absent that, all-zero with a warning.
+  any other commodity. Not hard-coded: `scripts/fetch_fomc_dates.py` scrapes the
+  Fed's own calendar pages into `data/raw/fomc_dates.csv` (decision days only;
+  unscheduled/cancelled meetings excluded, since the feature is specced as
+  known-in-advance). Absent that file, the flag is all-zero with a warning.
 
 Every feature's as-of lag is documented in `features.FEATURE_SPEC`.
 
@@ -122,9 +143,52 @@ contango) — expect few candidates flagged.
   ETCs) vs deferred-settlement futures raise distinct riba/qabd (possession)
   questions. A dedicated section fits naturally in the write-up.
 
-## Next (stages 3–6, not built yet)
+## Stage 3 — what the models actually found
 
-Baselines (random walk / momentum / logistic) → walk-forward gradient boosting →
-strategy layer (vol targeting, costs, stops) → backtest vs buy-and-hold and
-momentum → plots + research note. Baselines must beat a naive benchmark before the
-ML results are taken seriously.
+All evaluation is **walk-forward with an embargo**: expanding train window,
+refit per fold, and the `horizon` rows straddling each train/test boundary are
+purged so no overlapping forward label leaks across (López de Prado purging).
+Two heads run on identical folds: regression on the forward log return, and
+classification on its sign. The README's original bar stands: *baselines must
+beat a naive benchmark before the ML results are taken seriously.*
+
+Findings on real data (54 folds, ~3,390 OOS rows, 2013→2026 —
+`reports/model/`):
+
+- **The signal lives at the 1-day horizon and decays monotonically with N**
+  (`--horizons 1 5 10 20` sweep). At N=1, ridge beats naive RMSE (ratio 0.997)
+  with Spearman IC +0.108, and logistic beats the base rate (acc 0.543 vs
+  0.521, AUC 0.545). At N=20 nothing beats naive. Consistent with a feature set
+  of fast daily signals. N=1 is therefore the primary label.
+- **The regularized linear models carry the signal; XGBoost does not.** XGBoost
+  underperforms naive on RMSE at every horizon — the classic
+  overfit-on-low-signal-data pattern. Reported as a finding, not tuned away.
+- Magnitudes are honest: IC ~0.11 on daily gold is a thin edge, far from
+  precise return prediction. Grinold gives IC×√252 ≈ 1.7 as the gross IR
+  ceiling for such a signal — which is exactly the neighbourhood the stage-4
+  backtest lands in.
+
+## Stage 4 — strategy layer + backtest
+
+`src/strategy.py` turns the **stitched walk-forward OOS forecasts** (the only
+forecasts a live trader could have had) into positions: long/flat on the signal
+sign → vol targeting (trailing window, leverage cap) → trailing drawdown stop
+with cooldown → costs charged per unit turnover. Benchmarks run through the
+*identical* machinery so differences are signal, not plumbing.
+
+Headline (2013→2026, 1bp one-way costs, 10% vol target — `reports/backtest/`):
+ridge nets ~10%/yr at Sharpe ~1.2 vs ~0.4 for both vol-targeted long gold and
+raw buy-and-hold, with a breakeven cost of ~22bp — ~20× the realistic GC
+friction, so the result is not an artifact of the cost assumption. Caveats that
+belong in the write-up: idealized daily-close fills, flat bps costs, no
+slippage/financing, and a single 13-year sample of one asset.
+
+## Stages 5–6 — figures + the research note
+
+`src/plots.py` renders the figures (equity curves, drawdowns, rolling IC,
+horizon sweep, gold-vs-real-yields regime chart) from the generated artifacts —
+nothing is recomputed at plot time. **The finished write-up is
+[`reports/research_note.md`](reports/research_note.md)**: method, findings,
+strategy results, the structural-context sections above (real-rate regime
+break, central-bank buying, the AAOIFI Shariah Standard 57 angle), and the
+full limitations list.

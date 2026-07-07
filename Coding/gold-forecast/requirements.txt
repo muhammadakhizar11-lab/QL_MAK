@@ -2,14 +2,27 @@
 pandas>=2.0
 numpy>=1.24
 scipy>=1.10
-requests>=2.28
+requests>=2.28        # pulled in by yfinance (FRED itself uses curl, see below)
 PyYAML>=6.0
 yfinance>=0.2.40      # market data pull (Yahoo)
+
+# Modelling (stage 3): baselines + walk-forward XGBoost
+scikit-learn>=1.3     # baselines, pipelines, metrics
+xgboost>=2.0          # gradient-boosted trees (both heads)
+
+# Figures (stage 5)
+matplotlib>=3.8       # research-note figures (src/plots.py)
 
 # Dev / testing
 pytest>=7.0
 
-# NOTE: FRED is pulled via the free fredgraph.csv endpoint with `requests`,
-# so no fredapi key or pandas_datareader dependency is required.
-# Modelling / backtest deps (xgboost, lightgbm, shap, matplotlib) are added
-# in later stages, deliberately not here — stages 1-2 stay lean.
+# NOTE: FRED is pulled via the free fredgraph.csv endpoint using a curl
+# subprocess (Akamai bot protection stalls Python's requests/urllib3 TLS
+# fingerprint), so no fredapi key or pandas_datareader dependency is required.
+#
+# macOS: xgboost needs the OpenMP runtime (`libomp`). `brew install libomp` is
+# the clean fix. Where brew is unavailable, xgboost can load scikit-learn's
+# vendored copy (sklearn/.dylibs/libomp.dylib) — see README "Stage 3 setup".
+#
+# Possible extensions (not needed to reproduce): shap for feature attribution,
+# CFTC COT data for positioning features.
