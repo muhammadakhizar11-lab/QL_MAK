@@ -1,0 +1,77 @@
+# vrp-lab configuration.
+# All thresholds/windows live here — nothing is hardcoded in strategy code.
+# Secrets (API keys, if any) belong in .env, never in this file.
+
+date_range:
+  start: "2006-01-01"
+  end: null            # null => latest available
+
+data:
+  yahoo:
+    SPY: spy
+    ^GSPC: spx
+  fred:
+    VIXCLS: { name: vix_fred, freq: D }
+    DGS10:  { name: ust10y,   freq: D }
+    T10YIE: { name: breakeven10y, freq: D }
+  cboe:
+    vix_history_url: "https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv"
+    vx_settlements_url: "https://cdn.cboe.com/data/us/futures/market_statistics/historical_data/VX/VX_{expiry}.csv"
+  validation:
+    max_ffill_gap_days: 5      # forward-fill at most this many missing business days
+    staleness_max_repeats: 10  # flag a series if a value repeats this many days
+
+volatility:
+  window_default: 21           # trading days ~ 1 month
+  annualization_days: 252
+  vrp_horizons: [21, 63]       # 1M and 3M, in trading days
+  zscore_window: 252           # trailing window for VRP z-score
+
+signals:
+  vix_roll:
+    contango_entry_threshold: 0.05        # (VX1 - VIX)/VIX must exceed this to enter short
+    backwardation_exit_threshold: -0.02   # exit hysteresis: shallow dips are noise
+    vix_circuit_breaker: 30.0             # flat above this VIX level, no exceptions
+    max_holding_days: 60
+  regime:
+    low_vol_max: 15.0
+    crisis_min: 25.0
+    accel_ratio_max: 1.5             # 5d RV / 21d RV above this => vol accelerating, cut risk
+  vrp_zscore:
+    entry_z: 0.5                     # trailing-proxy VRP z-score must exceed this
+
+strategy:
+  vol_target_annual: 0.15            # 15% annualized portfolio vol target
+  max_notional_mult: 2.0             # position notional never exceeds 2x equity
+  crisis_exposure: 0.0               # exposure multiplier in Crisis regime
+  normal_exposure: 1.0
+  low_vol_exposure: 1.0
+
+backtest:
+  initial_capital: 1_000_000
+  vx_contract_multiplier: 1000       # $1000 per VIX point
+  roll_days_before_expiry: 4         # roll 3-5 days pre-expiry; we use 4
+  costs:
+    vx_half_spread_pts: 0.025        # crossing half the 0.05-pt bid-ask
+    vx_commission_per_contract: 1.32
+    vx_slippage_pts_per_contract: 0.01
+    spy_half_spread_bps: 0.5
+    spy_commission_per_share: 0.0035
+  margin:
+    vx_margin_frac: 0.30             # SPAN-style approximation: 30% of notional
+  cash_rate_series: ust10y           # proxy for cash interest / excess-return risk-free
+
+options:
+  dte_entry: 30
+  dte_exit: 5
+  stop_loss_premium_mult: 2.0        # close if unrealized loss > 2x premium collected
+  min_open_interest: 100
+  max_rel_spread: 0.20
+  tail_hedge:
+    long_put_delta: 0.05
+    short_put_delta: 0.02
+
+stress_events:
+  volmageddon: { start: "2018-01-26", end: "2018-02-12", label: "Feb 2018 XIV blow-up" }
+  covid:       { start: "2020-02-19", end: "2020-04-07", label: "Mar 2020 COVID crash" }
+  jpy_carry:   { start: "2024-07-31", end: "2024-08-09", label: "Aug 2024 JPY carry unwind" }

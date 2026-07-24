@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vrp-lab"
+version = "0.1.0"
+description = "Volatility Risk Premium measurement, decomposition and conditional harvesting"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Muhammad Ali Khizar" }]
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "scipy>=1.11",
+    "matplotlib>=3.8",
+    "plotly>=5.18",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+    "yfinance>=0.2.40",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "jupyter", "ruff"]
+extras = ["statsmodels", "arch", "py_vollib"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: hits live APIs (deselect with '-m \"not integration\"')",
+]
+addopts = "-m 'not integration'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
