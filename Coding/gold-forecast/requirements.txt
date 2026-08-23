@@ -1,4 +1,4 @@
-# Core (stages 1-2)
+# Core (all stages)
 pandas>=2.0
 numpy>=1.24
 scipy>=1.10

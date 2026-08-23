@@ -6,9 +6,6 @@ data/processed/*
 # small hand-maintained calendar is OK to commit
 !data/raw/fomc_dates.csv
 
-# Generated reports
-reports/data_quality/report.md
-
 # Python
 __pycache__/
 *.py[cod]

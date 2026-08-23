@@ -1,7 +1,8 @@
 # =============================================================================
 # config.yaml  —  single source of truth for tickers, dates, and parameters
 # =============================================================================
-# Stages 1-2 only (data + features). Model/backtest params live elsewhere later.
+# Covers all six stages: data/validation/features below, modelling under `model:`,
+# strategy + backtest under `strategy:`.
 
 date_range:
   start: "2010-01-01"

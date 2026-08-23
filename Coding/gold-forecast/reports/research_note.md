@@ -14,7 +14,7 @@ forward COMEX gold return with an out-of-sample Spearman IC of **+0.108**
 long/flat strategy layer with a 10% vol target, a trailing stop, and 1bp
 one-way costs, that thin edge compounds to **~10.0%/yr net at a Sharpe of
 1.16**, against 0.40–0.41 for vol-targeted long gold and raw buy-and-hold, and
-0.06 for a 20-day momentum rule. The breakeven cost is **21.7bp one-way** —
+0.06 for a 20-day momentum rule. The breakeven cost is **21.6bp one-way** —
 roughly 20× realistic gold-futures friction — so the result is not an artifact
 of the cost assumption. Equally important negatives: the signal decays
 monotonically with horizon (nothing beats naive at 20 days), and gradient
@@ -123,7 +123,7 @@ signal, not plumbing.
 
 | strategy | net/yr | Sharpe | max DD | avg \|pos\| | turnover/yr | b/e cost |
 |---|---|---|---|---|---|---|
-| **ridge (signal)** | **10.0%** | **1.16** | **22.5%** | 0.46 | 48× | **21.7bp** |
+| **ridge (signal)** | **10.0%** | **1.16** | **22.5%** | 0.46 | 48× | **21.6bp** |
 | logistic (signal) | 7.7% | 0.84 | 22.6% | 0.48 | 50× | 16.2bp |
 | long always (vol-targeted) | 4.5% | 0.40 | 36.0% | 0.75 | 9× | — |
 | momentum 20d | 0.5% | 0.06 | 40.5% | 0.40 | 24× | 3.2bp |
@@ -137,7 +137,7 @@ Three observations worth making explicitly:
    breadth) sits inside that ceiling. If the backtest had produced Sharpe 3, the
    right response would have been to hunt for the bug.
 2. **The edge survives its cost assumption by a wide margin.** Breakeven at
-   21.7bp one-way vs ~0.5–1bp realistic GC friction. Contrast the momentum
+   21.6bp one-way vs ~0.5–1bp realistic GC friction. Contrast the momentum
    rule's 3.2bp — an "edge" that dies on any real desk.
 3. **Most of the risk improvement is the exit, not the entry.** Ridge spends
    only 46% of days long and cuts the max drawdown from 48% (owning gold) to

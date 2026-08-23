@@ -1,4 +1,4 @@
-# Gold Forecasting — Stages 1–4 (Data → Features → Models → Backtest)
+# Gold Forecasting — Stages 1–6 (Data → Features → Models → Backtest → Figures → Note)
 
 Research/portfolio project: forecast short-horizon gold returns from free public
 data, then turn that into a backtested systematic strategy.
