@@ -9,7 +9,7 @@ Authoritative spec. Claude Code reads this first and treats it as the source of 
 
 ## A1. Objective
 
-Buy full fragrance bottles that are listed below their exit value in UK peer-to-peer groups (Facebook, WhatsApp, r/UKFragranceSwap). Sell them on the venue with the best net price, which is usually Vinted.
+Buy fragrance bottles that are listed below their exit value in UK peer-to-peer groups (Facebook, WhatsApp, r/UKFragranceSwap). Sell them across all venues.
 
 Show, with point-in-time discipline and honest statistics, whether a fair-value signal identifies trades that are profitable after costs and that sell within 7 days.
 
@@ -19,10 +19,12 @@ This is a **portfolio project** to demonstrate quantitative trading skills. Succ
 
 | In scope | Out of scope |
 |---|---|
-| Full bottles: new, used, part-full, testers | Decants and samples |
+| Bottles: new, used, part-full (**≥50% full** to buy), testers | Decants and samples; buying bottles under 50% full |
 | Buying in groups (FB, WhatsApp, Reddit) | Buying on Vinted |
-| Selling on any venue (Vinted the main exit) | Automated collection from Facebook or Vinted |
-| Off-the-shelf models (LLM, vision LLM, CLIP) | Building or training ML models from scratch |
+| Selling across all venues | Automated collection from Facebook or Vinted |
+| Products on the watchlist (`watchlist.yaml`) | Products outside the watchlist, unless added to it |
+| Free tooling by default: rules, fuzzy matching, OCR, pretrained image embeddings with a small trained fill-level classifier | Training any model from scratch; any paid API as a *required* step |
+| Optional Anthropic API backend (off by default) | |
 | Own modelling: fair value, signal, validation | Live trading at scale |
 
 ## A3. Venues and data requirements
@@ -31,7 +33,7 @@ This is a **portfolio project** to demonstrate quantitative trading skills. Succ
 |---|---|---|---|
 | Facebook groups | Main price source; buy and sell | **Manual** screenshots plus post URL | Weak: sometimes edited to "sold", often not |
 | WhatsApp groups | Buy and sell | Built-in chat export with media | Follow-up messages ("sold", "pending") |
-| r/UKFragranceSwap | Buy and sell; **main source of outcome labels** | Official Reddit API (PRAW) | Flair or "[SOLD]" edits (rules to be confirmed) |
+| r/UKFragranceSwap | Buy and sell; **[WTB] posts give buyer-side (bid) prices** | Official Reddit **Data API** via PRAW (app registered at reddit.com/prefs/apps) | **No "sold" flair exists.** Evidence is sometimes a comment stating the result; otherwise there is none (censored) |
 | Vinted | **Exit only** | **Manual** screenshots of comparable listings | **Reliable:** marked "Sold" automatically once the transaction completes |
 
 **Facts confirmed by Muhammad**
@@ -41,6 +43,12 @@ This is a **portfolio project** to demonstrate quantitative trading skills. Succ
 - **Sold marking:** on Vinted it is automatic and reliable. On the group venues it is sometimes edited to "sold" but often not, and recent posts are more likely to still be live.
 - **Shipping:** in groups, Royal Mail T48 (**£3.65**) is usually *included in the ask*. On Vinted, InPost (**~£2.55**) is **paid by the seller**, and buyers pay the Vinted fee.
 - **Vinted:** allows used or part-full fragrance if it is declared as such.
+- **r/UKFragranceSwap posting conventions:**
+  - The title must start with **[WTS]** (want to sell), **[WTT]** (want to trade), **[WTB]** (want to buy) or **[GIVEAWAY]**.
+  - Every post must carry a flair: **Bottle**, **Decant** or **Bottle and Decant**.
+  - **Use:** [WTS] posts with flair *Bottle* or *Bottle and Decant* are sell-side listings (keep only the bottle items). [WTB] posts are buy-side (bid) data. [WTT] posts are kept only where a cash price is stated. [GIVEAWAY] posts and *Decant*-only posts are excluded.
+- **Versions:** where a fragrance comes in several versions (e.g. EDP and a pricier Extrait), each version is a **separate product with its own name** (e.g. "Baccarat Rouge 540 Extrait"). There is no separate concentration field.
+- **Fill floor:** never buy a bottle that is **less than half full**.
 - **Fast-sale window:** **7 days**. If a bottle hasn't sold by then, relist it.
 
 ## A4. Functional requirements
@@ -49,12 +57,13 @@ This is a **portfolio project** to demonstrate quantitative trading skills. Succ
 |---|---|
 | F1 | Ingest all four venues into one `listings` table: UTC timestamps, GBP prices, one row per post. |
 | F2 | Exclude decants and samples. |
-| F3 | Extract structured fields per bottle: brand, fragrance, concentration, size, fill, condition, batch, shipping status, price. |
+| F3 | Extract structured fields per bottle: brand, fragrance (including the version in the name where one exists, e.g. "Sauvage Elixir"), size, fill, condition, batch, shipping status, price. If the version of a multi-version product can't be identified, flag the row. |
+| F3b | **Fill floor:** bottles under 50% full are never flagged as buys. They stay in the data as price comparables for how fill level affects price. |
 | F4 | Decode disguised or phonetic brand names using a growing alias table. |
 | F5 | Determine fill level from photos when the text says "level as seen" or gives none. |
 | F6 | **Deduplicate cross-posts:** the same bottle posted in several groups is one listing, not several. |
 | F7 | Detect relists, including group → Vinted, using image embeddings plus field matching. The handwritten date tag also helps. |
-| F8 | Normalise every price to **shipping-included**. |
+| F8 | Normalise every price to **shipping-included**. The default is that shipping is included. If the post says to add T48, add postage, or offers "postage of your choice", **add £3.65**. |
 | F9 | Split bundles when per-item prices are given. Exclude bundles without them from modelling, and count them. |
 | F10 | Estimate a point-in-time fair value per bottle, with uncertainty (q10, q50, q90), for each exit venue. |
 | F11 | Compute expected profit at the best exit and an uncertainty-scaled edge. Flag trades above the thresholds. |
@@ -69,17 +78,18 @@ This is a **portfolio project** to demonstrate quantitative trading skills. Succ
 | N1 | **Point-in-time:** no feature, comparable or fair value may use information from after the listing's `posted_at`. This is enforced by tests. |
 | N2 | **Privacy:** sellers' names, usernames and phone numbers are never stored in processed data (salted hashes only). **Photos show sellers' names on their tags**, so raw screenshots and photos stay on the local machine only. They are never added to Git or pushed to GitHub, and any image used in the write-up is redacted first. |
 | N3 | **Compliance:** no automation against Facebook or Vinted. Reddit is accessed through the official API only. |
-| N4 | **Reproducibility:** one command rebuilds the processed data from raw data. LLM calls are cached. All costs and thresholds live in `config.yaml`. |
+| N4 | **Reproducibility:** one command rebuilds the processed data from raw data. Any optional API calls are cached. All costs and thresholds live in `config.yaml`, including `extractor_backend` (`free` by default, or `api`). |
 | N5 | **Honesty:** outcome definitions are fixed (A6) before results are seen. Results are reported whatever they show. |
-| N6 | **Model error is measured:** all off-the-shelf components are scored against hand labels before use. |
+| N6 | **Model error is measured:** every extraction component (rules, fuzzy matching, OCR, the fill classifier and the optional API backend) is scored against locked hand labels before use. |
 
 ## A6. Fixed definitions (pre-registered)
 
 | Item | Definition |
 |---|---|
-| Product key | brand + fragrance (canonical) |
-| Model target | price per ml, shipping-included |
-| Sold | Explicit evidence only: a "sold" edit, comment, message or flair. |
+| Product key | brand + fragrance name, with the version in the name where one exists (canonical) |
+| Model target | **log(price ÷ (RRP per ml × size))**: price as a fraction of retail, shipping-included. Fill, condition and the other attributes are features, so sealed and used bottles of the same product price differently. May be revisited if a better target emerges; any change is logged. |
+| Buy universe | Watchlist products, fill ≥50%, not collection-only, group venues only |
+| Sold | Explicit evidence only: a "sold" edit, comment or message (groups); "Sold" status (Vinted). |
 | Deleted post | **Primary:** censored at the last time it was seen live. **Sensitivity check:** treated as sold. |
 | No evidence either way | Censored at the last time it was seen live (or at capture time). |
 | Fast sale | Sold within **7 days** of `posted_at`. |
@@ -104,7 +114,7 @@ This is a **portfolio project** to demonstrate quantitative trading skills. Succ
 ```
  Facebook screenshots ─┐
  WhatsApp export ──────┤                                     ┌─► Fair value (group)  ─┐
- Reddit API ───────────┼─► 1 Ingest ─► 2 Extract text ─► 3 Fill (vision) ─► 4 Dedupe/match ─► 5 Fair value ─┤                        ├─► 6 Signal ─► 7 Validate ─► 8 Report
+ Reddit API ───────────┼─► 1 Ingest ─► 2 Extract text ─► 3 Fill level ─► 4 Dedupe/match ─► 5 Fair value ─┤                        ├─► 6 Signal ─► 7 Validate ─► 8 Report
  Vinted screenshots ───┘                                     └─► Vinted mark-up      ─┘
 ```
 
@@ -116,32 +126,48 @@ This is a **portfolio project** to demonstrate quantitative trading skills. Succ
   - Facebook revisits log columns: `capture_id, checked_at, status, new_price, final_price_if_stated`.
 - **Process:**
   - Parse the WhatsApp export (UK and US date formats), linking each image to its message.
-  - Pull Reddit history plus new posts with PRAW, storing raw JSON snapshots.
+  - Pull Reddit history plus new posts with PRAW, storing raw JSON snapshots. Route posts by title tag and flair, as set out in A3.
   - Apply the salted hash to every person identifier.
 - **Output:** `listings` (listing_id, venue, group_code, posted_at, seller_hash, raw_text, image_paths, is_backfill).
 - **Done when:** every venue loads; there is no real name in any processed file (a test scans for it).
 
-### Stage 2 — Text extraction
+### Stage 2 — Text extraction (free by default)
 - **Process:**
-  - Run the Claude API with a fixed JSON schema, passing the alias table in the prompt.
-  - Extract one row per bottle; split bundles when per-item prices are given.
-  - Extract `shipping_status` ∈ {included, extra, collection}.
-  - Filter out decants.
-  - Cache every response.
+  - **Screenshots:** run free OCR (Tesseract or PaddleOCR) to get the text; WhatsApp and Reddit already provide text.
+  - **Product matching:** fuzzy and phonetic matching of the text against the watchlist, plus the alias table for disguised or phonetic spellings (e.g. `rapidfuzz`). Match on brand and fragrance together. Rows that don't match confidently go to a **review queue**; Muhammad resolves them, and each resolution adds an alias.
+  - **Rules (regex):** price, size in ml, stated fill percentage, condition (sealed, boxed, tester), batch, and `shipping_status` ∈ {included, extra, collection}. "Add T48" or "postage of your choice" counts as `extra`.
+  - Split bundles when per-item prices are given; flag unpriced bundles.
+  - Filter out decants and samples by keyword rules.
+  - Flag rows where the version of a multi-version product is unclear.
+- **Optional backend:** when `extractor_backend: api`, the Anthropic API is used for rows the free path can't resolve (or for all rows). Responses are cached by input hash. The pipeline must produce a complete `extracted` table with the API switched off.
 - **Output:** `extracted`. Columns:
-  - product_key, concentration, size_ml
+  - product_key, size_ml
   - fill_bucket, fill_source, condition, batch_year, discontinued
   - ask_gbp_raw, shipping_status, ask_gbp (normalised), price_per_ml
-  - is_bundle_unpriced, extract_confidence
-- **Done when:** field accuracy is reported against about 200 hand-labelled listings.
+  - is_bundle_unpriced, extract_confidence, match_method (rule / fuzzy / alias / manual / api)
+- **Done when:** field accuracy and the share of rows sent to the review queue are reported against about 200 hand-labelled listings.
 
-### Stage 3 — Fill level (vision)
-- **Process:** a vision LLM classifies fill into {sealed, 95–100, 75–95, 50–75, <50} where text is missing or says "level as seen". Text–image conflicts are logged, not overwritten. Vinted uses the declared fill, with vision as a cross-check.
-- **Done when:** accuracy and the confusion matrix are reported against about 150 hand-labelled photos.
+### Stage 3 — Fill level
+- **Step 1 — text first:** where the post states a fill percentage ("90% full", "sealed"), use it (`fill_source = text`).
+- **Step 2 — photo classifier:** where the text says "level as seen" or gives nothing, predict fill from the photo.
+  - **Model:** pretrained image embeddings (CLIP or DINOv2, PyTorch, run on the Mac CPU) feeding a small trained head (logistic regression first; a small PyTorch head if that's weak). Fine-tune the backbone only if the head is clearly not enough.
+  - **Target:** the ordered buckets {sealed, 95–100, 75–95, 50–75, <50}. The decision that matters most is **≥50% or not** (the fill floor), so report that split separately.
+  - **Training labels:**
+    - *Weak labels:* posts that state a fill percentage in text, paired with their photos.
+    - *Hand labels:* a locked set of about 150 photos, **never used for training**, as the test set.
+  - **Known bias:** posts that state their fill in text may differ from "level as seen" posts (different bottles, photos, sellers). The locked test set must be drawn from **"level as seen" posts**, so it measures the real use case.
+  - **Optional comparison:** fill labels produced by Claude Code reading the photos in a session, saved to a labels file, can serve as a benchmark or fallback. This uses subscription allowance, not API billing.
+- **Conflicts:** where text and photo disagree, record both and flag the row; never silently overwrite.
+- **Vinted:** use the declared fill, with the classifier as a cross-check.
+- **Done when:**
+  - Bucket accuracy, within-one-bucket accuracy and the confusion matrix are reported on the locked test set.
+  - Precision and recall of the ≥50% split are reported.
+  - Error propagation (a one-bucket mistake) into fair value is measured (Part A, N6).
+  - If the classifier is not good enough, the fallback is the rule: unknown fill → not a buy.
 
 ### Stage 4 — Dedupe and relist matching
 - **Process:**
-  - Compute CLIP embeddings for each photo (PyTorch, inference only).
+  - Reuse the image embeddings computed in Stage 3 (PyTorch, inference only).
   - Two listings are the **same item** when they share a seller hash and product key, their image similarity is above a threshold, and they fall within N days of each other.
   - **Cross-posts** (same seller, close in time) collapse into one listing, keeping the earliest `posted_at` and merging the outcome evidence.
   - **Relists** (later in time, or on another venue, possibly at a new price) are linked by `item_id` and give extra outcome evidence.
@@ -150,14 +176,14 @@ This is a **portfolio project** to demonstrate quantitative trading skills. Succ
 
 ### Stage 5 — Fair value
 - **Group model:**
-  - LightGBM, quantile loss at q = 0.1, 0.5 and 0.9, on `price_per_ml`.
+  - LightGBM, quantile loss at q = 0.1, 0.5 and 0.9, on the target defined in A6.
   - **Trained on all prior listings** (not sold-only, since sold labels are too sparse), with listing age and outcome status as features.
   - **Features:**
-    - concentration, size_ml, fill_bucket, condition, batch_year, discontinued
-    - RRP per ml (hand-built table, top ~100 products)
+    - size_ml, fill_bucket, condition, batch_year, discontinued
+    - RRP per ml (hand-built table, one row per watchlist product)
     - brand
     - product_key (target-encoded out of fold only)
-    - point-in-time rolling median price per ml and comparable count for the product key
+    - point-in-time rolling median of the target and comparable count for the product key
     - venue, month
 - **Ask-to-sale adjustment:** estimate the discount between ask and sale price from items with a visible final price, and between unsold asks and sold asks. Apply it to q50 and widen the interval to reflect its uncertainty.
 - **Sparse products:** where a product has fewer than k comparables, fall back on a brand-level estimate, widen the interval, and report coverage separately.
@@ -172,7 +198,8 @@ This is a **portfolio project** to demonstrate quantitative trading skills. Succ
 - **Best exit:** `best_exit = max_v exit_v`.
 - **Expected profit:** `exp_profit = best_exit − ask_gbp`.
 - **Edge:** `exp_profit / (q90 − q10)` at the best-exit venue.
-- **Trade flag:** `edge > θ`, `exp_profit > £10`, a buyable group venue, and not collection-only. θ is chosen on validation data only.
+- **Trade flag:** `edge > θ`, `exp_profit > £10`, inside the buy universe (A6: watchlist, fill ≥50%, group venue, not collection-only). θ is chosen on validation data only.
+- **Bid check (Reddit):** where an open [WTB] post exists for the same product, record the stated bid next to the flag as extra evidence of exit demand.
 
 ### Stage 7 — Validation
 - **Primary test (survival):**
@@ -205,7 +232,8 @@ frag-arb/
   data/{raw,interim,processed,labels}/   # raw/ git-ignored, labels/ append-only
   src/fragarb/
     ingest/{facebook.py,whatsapp.py,reddit.py,vinted.py}
-    extract/{text.py,vision.py,aliases.py,shipping.py,bundles.py}
+    extract/{ocr.py,fuzzy.py,rules.py,aliases.py,shipping.py,bundles.py,review_queue.py,api_optional.py}
+    extract/fill/{weak_labels.py,embed.py,train.py,predict.py}
     match/{embeddings.py,dedupe.py}
     model/{features.py,fair_value.py,vinted_markup.py,tune.py}
     signal/{edge.py}
@@ -219,8 +247,10 @@ frag-arb/
 ## B4. Tech stack
 - Python 3.12, `uv`, `ruff`, `pytest`
 - Polars, LightGBM, Optuna, `lifelines` (survival analysis)
-- PyTorch with `open_clip` (CLIP inference)
-- PRAW, the Anthropic SDK, matplotlib
+- PyTorch with `open_clip` or `transformers` (image embeddings and the small fill-level head), scikit-learn
+- `rapidfuzz` (matching), Tesseract or PaddleOCR (OCR)
+- PRAW, matplotlib
+- Anthropic SDK (**optional**, only if `extractor_backend: api`)
 
 ## B5. Build plan (3 weeks)
 
@@ -228,19 +258,20 @@ frag-arb/
 |---|---|---|---|
 | 1 | Repo, Git, `CLAUDE.md`, `config.yaml`, privacy module + tests | Register the Reddit app; get the r/UKFragranceSwap rules; start Facebook backfill capture | Repo runs; privacy test passes |
 | 2–4 | Stage 1, all venues | Facebook backfill (aim for 300+); export WhatsApp; Vinted comparables for the top products | `listings` built |
-| 4–5 | Hand-label set (text, fill, dedupe pairs) | Labelling | Labels locked |
-| 6–8 | Stages 2–3 plus accuracy reports | Build the RRP table (top ~100) | Accuracy reported |
-| 9–10 | Stage 4 dedupe and relist matching | Continue forward captures and revisits | Raw vs deduplicated counts reported |
-| 11–14 | Stage 5 fair value, Optuna, Vinted mark-up | **Start live trades now**, so they finish within the 3 weeks | Coverage close to 80% |
+| 4–5 | Hand-label set (text fields, fill test photos, dedupe pairs) | Labelling | Labels locked |
+| 6–8 | Stage 2: OCR, fuzzy matching, rules, review queue; accuracy report | Build the RRP table; clear the review queue | Field accuracy reported |
+| 8–10 | Stage 3: weak labels, embeddings, fill classifier; accuracy report | Label extra fill photos if the classifier needs them | Locked-test accuracy reported |
+| 10–11 | Stage 4 dedupe and relist matching | Continue forward captures and revisits | Raw vs deduplicated counts reported |
+| 12–14 | Stage 5 fair value, Optuna, Vinted mark-up | **Start live trades now**, so they finish within the 3 weeks | Coverage close to 80% |
 | 15–17 | Stages 6–7 signal and survival validation | Log live trades | Pre-registered tests run |
 | 18–21 | Stage 8 report; sensitivity and robustness checks | Close live trades | Note written |
 
 Week 1 is mostly manual data collection, and that is expected.
 
 ## B6. Rules for Claude Code
-- Muhammad writes the core Polars transforms and the LightGBM/Optuna code himself. Claude Code scaffolds, writes tests and reviews.
+- **Polars is used for all data handling** (no pandas, except where a library requires it at the boundary).
+- **Optuna is used for all hyperparameter tuning.**
 - Every feature builder takes an `as_of` timestamp and has a point-in-time test.
-- Never automate access to Facebook or Vinted.
 - All costs and thresholds are read from `config.yaml`.
 - Work on feature branches, with small commits and clear messages.
 
@@ -248,20 +279,24 @@ Week 1 is mostly manual data collection, and that is expected.
 
 # ASKS, NEEDS AND OPEN QUESTIONS
 
+## Decisions needed
+1. **Watchlist:** confirm the product list in chat; it is then saved as `watchlist.yaml`.
+
 ## From Muhammad
-1. **r/UKFragranceSwap rules and flair conventions:** paste them in.
-2. **Register a Reddit app** (reddit.com/prefs/apps) on day 1, since approval may take weeks.
-3. **Anthropic API key** for text and vision extraction. Put it in `.env`, never in Git.
-4. **Facebook backfill:** 300+ full-bottle listings (screenshot plus post URL plus posting date), from the groups with the most history.
-5. **WhatsApp exports** with media, for each relevant group.
-6. **Vinted comparables:** 3–5 per product for the ~50–100 most common products, sold ones preferred.
-7. **RRP table:** retail price and size for the top ~100 products.
-8. **Hand labels:** ~200 listings (text fields), ~150 photos (fill level), ~100 pairs (same bottle or not).
-9. **Live trades:** budget for 3–5 bottles, and a log of each one.
-10. **Courtesy check:** ask the Facebook group admins whether they mind the data being used.
+1. **Register a Reddit app for the Data API** at reddit.com/prefs/apps on day 1, since approval may take weeks.
+   - *Not* the Devvit API (developers.reddit.com): Devvit apps only read the subreddit they are installed on, and installing needs a moderator.
+2. **(Optional) Anthropic API key**, only if you switch `extractor_backend` to `api`. Put it in `.env`, never in Git. The project runs without it.
+3. **Facebook backfill:** 300+ bottle listings for watchlist products (screenshot plus post URL plus posting date), from the groups with the most history.
+4. **WhatsApp exports** with media, for each relevant group.
+5. **Vinted comparables:** 3–5 per watchlist product, sold ones preferred.
+6. **RRP table:** retail price and size for every watchlist product (each version is its own row).
+7. **Hand labels:** ~200 listings (text fields), ~150 "level as seen" photos for the **locked fill-level test set**, ~100 pairs (same bottle or not). Also clear the match review queue as it fills, and label extra fill photos if the classifier needs them.
+8. **Live trades:** budget for 3–5 bottles, and a log of each one.
+9. **Courtesy check:** ask the Facebook group admins whether they mind the data being used.
 
 ## To find out during the build
 - How far back the Reddit API reaches for r/UKFragranceSwap.
 - What share of group posts show any evidence of being sold. If it's under ~10%, Reddit, the forward revisits and Vinted carry the validation.
 - Bundle frequency (unpriced bundles are excluded and counted).
 - **k** (the minimum number of comparables), dedupe and matching thresholds, and θ (the trade threshold). Set these from the data and log them.
+
